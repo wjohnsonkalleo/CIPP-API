@@ -15,6 +15,23 @@ function Invoke-CippGraphWebhookRenewal {
 
     if (($WebhookData | Measure-Object).Count -gt 0) {
         Write-LogMessage -API 'Scheduler_RenewGraphSubscriptions' -tenant 'none' -message 'Starting Graph Subscription Renewal' -sev Info
+        $WebhookData = $WebhookData | Group-Object -Property PartitionKey, Resource, EventType, TypeofSubscription | ForEach-Object {
+            $GroupedSubscriptions = @($_.Group | Sort-Object -Property @{ Expression = { Get-Date($_.Expiration) }; Descending = $true })
+            $SubscriptionToRenew = $GroupedSubscriptions | Select-Object -First 1
+            $DuplicateSubscriptions = $GroupedSubscriptions | Select-Object -Skip 1
+
+            foreach ($DuplicateSub in $DuplicateSubscriptions) {
+                try {
+                    Write-LogMessage -API 'Renew_Graph_Subscriptions' -message "Removing duplicate renewal row for $($DuplicateSub.SubscriptionID) as $($SubscriptionToRenew.SubscriptionID) is the newest $($DuplicateSub.EventType) subscription for $($DuplicateSub.Resource)." -sev 'Warning' -tenant $DuplicateSub.PartitionKey
+                    Remove-AzDataTableEntity -Force @WebhookTable -Entity $DuplicateSub
+                } catch {
+                    Write-LogMessage -API 'Renew_Graph_Subscriptions' -message "Failed to remove duplicate renewal row for $($DuplicateSub.SubscriptionID). Error: $($_.Exception.message)" -Sev 'Warning' -tenant $DuplicateSub.PartitionKey
+                }
+            }
+
+            $SubscriptionToRenew
+        }
+
         foreach ($UpdateSub in $WebhookData) {
             try {
                 $TenantFilter = $UpdateSub.PartitionKey

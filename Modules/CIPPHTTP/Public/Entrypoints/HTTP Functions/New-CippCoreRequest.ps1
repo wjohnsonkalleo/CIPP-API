@@ -29,6 +29,10 @@ function New-CippCoreRequest {
     if (-not $script:CippUserRolesStorage) {
         $script:CippUserRolesStorage = [System.Threading.AsyncLocal[hashtable]]::new()
     }
+    if (-not $script:CippRequestHeadersStorage) {
+        $script:CippRequestHeadersStorage = [System.Threading.AsyncLocal[object]]::new()
+    }
+    $script:CippRequestHeadersStorage.Value = $Request.Headers
 
     # Initialize user roles cache for this request
     if (-not $script:CippUserRolesStorage.Value) {
@@ -129,7 +133,7 @@ function New-CippCoreRequest {
 
             try {
                 Write-Information "Access: $Access"
-                Write-LogMessage -headers $Headers -API $Request.Params.CIPPEndpoint -message 'Accessed this API' -Sev 'Debug'
+                Write-LogMessage -headers $Request.Headers -API $Request.Params.CIPPEndpoint -message 'Accessed this API' -Sev 'Debug'
                 if ($Access) {
                     # Prepare telemetry metadata for HTTP API call
                     $metadata = @{
@@ -149,6 +153,14 @@ function New-CippCoreRequest {
                     # Add user info if available
                     if ($Request.Headers.'x-ms-client-principal-name') {
                         $metadata['User'] = $Request.Headers.'x-ms-client-principal-name'
+                    } elseif ($Request.Headers.'x-ms-client-principal') {
+                        try {
+                            $ClientPrincipal = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($Request.Headers.'x-ms-client-principal')) | ConvertFrom-Json
+                            $metadata['User'] = $ClientPrincipal.userDetails
+                            $metadata['UserId'] = $ClientPrincipal.userId
+                        } catch {
+                            $metadata['User'] = 'Unknown'
+                        }
                     }
 
                     # Wrap the API call execution with telemetry

@@ -13,14 +13,31 @@ function Write-LogMessage {
         $sev,
         $LogData = ''
     )
-    if ($Headers.'x-ms-client-principal-idp' -eq 'azureStaticWebApps' -or !$Headers.'x-ms-client-principal-idp') {
-        $user = $headers.'x-ms-client-principal'
-        $username = ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($user)) | ConvertFrom-Json).userDetails
+    if (!$Headers -and $script:CippRequestHeadersStorage -and $script:CippRequestHeadersStorage.Value) {
+        $Headers = $script:CippRequestHeadersStorage.Value
+    }
+
+    $ClientPrincipal = $null
+    if ($Headers.'x-ms-client-principal') {
+        try {
+            $user = $headers.'x-ms-client-principal'
+            $ClientPrincipal = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($user)) | ConvertFrom-Json
+            $username = $ClientPrincipal.userDetails
+            $UserId = $ClientPrincipal.userId
+            $UserIdp = $Headers.'x-ms-client-principal-idp'
+        } catch {
+            $username = $user
+        }
     } elseif ($Headers.'x-ms-client-principal-idp' -eq 'aad') {
         $Table = Get-CIPPTable -TableName 'ApiClients'
         $Client = Get-CIPPAzDataTableEntity @Table -Filter "RowKey eq '$($headers.'x-ms-client-principal-name')'"
         $username = $Client.AppName ?? 'CIPP-API'
         $AppId = $headers.'x-ms-client-principal-name'
+        $UserIdp = $Headers.'x-ms-client-principal-idp'
+    } elseif ($Headers.'x-ms-client-principal-name') {
+        $username = $Headers.'x-ms-client-principal-name'
+        $UserId = $Headers.'x-ms-client-principal-id'
+        $UserIdp = $Headers.'x-ms-client-principal-idp'
     } else {
         try {
             $username = ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($user)) | ConvertFrom-Json).userDetails
@@ -64,6 +81,12 @@ function Write-LogMessage {
     }
     if ($AppId) {
         $TableRow.AppId = [string]$AppId
+    }
+    if ($UserId) {
+        $TableRow.ActorId = [string]$UserId
+    }
+    if ($UserIdp) {
+        $TableRow.ActorIdentityProvider = [string]$UserIdp
     }
     if ($tenantId) {
         $TableRow.Add('TenantID', [string]$tenantId)
