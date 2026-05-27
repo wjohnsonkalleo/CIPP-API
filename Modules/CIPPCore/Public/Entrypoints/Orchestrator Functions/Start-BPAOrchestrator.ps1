@@ -10,6 +10,7 @@ function Start-BPAOrchestrator {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         $TenantFilter = 'AllTenants',
+        [int64]$RerunIntervalSeconds = 0,
         [switch]$Force
     )
 
@@ -69,6 +70,7 @@ function Start-BPAOrchestrator {
                     FunctionName = 'BPACollectData'
                     Tenant       = $Tenant
                     Template     = $Template
+                    RerunIntervalSeconds = $RerunIntervalSeconds
                     QueueName    = '{0} - {1}' -f $Template, $Tenant
                 }
             }
