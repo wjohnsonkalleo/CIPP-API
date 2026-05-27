@@ -182,7 +182,8 @@
     "Cron": "0 20 3 * * *",
     "Priority": 10,
     "TZOffset": true,
-    "RunOnProcessor": true
+    "RunOnProcessor": true,
+    "PreferredProcessor": "proc"
   },
   {
     "Id": "54c39540-fe91-4795-8613-ac4295751a51",

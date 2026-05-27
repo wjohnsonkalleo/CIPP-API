@@ -16,6 +16,13 @@ function Start-BPAMonthlyOrchestrator {
     )
 
     try {
+        $CurrentFunctionApp = $env:WEBSITE_SITE_NAME
+        $IsProcessorNode = $env:CIPP_PROCESSOR -eq 'true' -or $CurrentFunctionApp -like '*-proc'
+        if (!$IsProcessorNode) {
+            Write-LogMessage -API 'BestPracticeAnalyser' -message "Monthly BPA scheduler skipped on non-processor app '$CurrentFunctionApp'" -sev Info
+            return $false
+        }
+
         $FeatureFlag = Get-CIPPFeatureFlag -Id 'BestPracticeAnalyser'
         if ($FeatureFlag -and $FeatureFlag.Enabled -eq $false) {
             Write-LogMessage -API 'BestPracticeAnalyser' -message 'Monthly BPA scheduler skipped because Best Practice Analyser is disabled via feature flag' -sev Info
