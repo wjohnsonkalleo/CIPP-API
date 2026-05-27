@@ -82,6 +82,9 @@ function Write-LogMessage {
     if ($AppId) {
         $TableRow.AppId = [string]$AppId
     }
+    if ($script:CippInvocationIdStorage -and $script:CippInvocationIdStorage.Value) {
+        $TableRow.InvocationId = [string]$script:CippInvocationIdStorage.Value
+    }
     if ($UserId) {
         $TableRow.ActorId = [string]$UserId
     }
