@@ -20,7 +20,15 @@ function Push-BPACollectData {
     }
     $Table = Get-CippTable -tablename 'cachebpav2'
 
-    $Rerun = Test-CIPPRerun -Type 'BPA' -Tenant $Item.Tenant -API $Item.Template
+    $RerunParams = @{
+        Type         = 'BPA'
+        TenantFilter = $Item.Tenant
+        API          = $Item.Template
+    }
+    if ($Item.RerunIntervalSeconds -and [int64]$Item.RerunIntervalSeconds -gt 0) {
+        $RerunParams.Interval = [int64]$Item.RerunIntervalSeconds
+    }
+    $Rerun = Test-CIPPRerun @RerunParams
     if ($Rerun) {
         Write-Host 'Detected rerun for BPA. Exiting cleanly'
         return

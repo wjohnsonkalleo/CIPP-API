@@ -177,9 +177,9 @@
   },
   {
     "Id": "80070b4f-95ed-4e5f-be4c-9e339306d4aa",
-    "Command": "Start-BPAOrchestrator",
-    "Description": "Orchestrator to process BPA reports",
-    "Cron": "0 0 3 * * *",
+    "Command": "Start-BPAMonthlyOrchestrator",
+    "Description": "Orchestrator to process BPA reports monthly per tenant",
+    "Cron": "0 20 3 * * *",
     "Priority": 10,
     "TZOffset": true,
     "RunOnProcessor": true
