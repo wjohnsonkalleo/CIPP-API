@@ -38,33 +38,43 @@ function Invoke-PublicWebhooks {
         } else {
             Write-Host 'Found matching CIPPID'
             $WebhookIncoming = Get-CIPPTable -TableName WebhookIncoming
+            $GetWebhookRowKey = {
+                param($WebhookType, $CippId, $WebhookData)
+                $WebhookJson = $WebhookData | ConvertTo-Json -Depth 20 -Compress
+                $HashInput = [System.Text.Encoding]::UTF8.GetBytes("$WebhookType|$CippId|$WebhookJson")
+                $Hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($HashInput)
+                $HashString = [System.BitConverter]::ToString($Hash).Replace('-', '').ToLowerInvariant()
+                return "$WebhookType-$HashString"
+            }
 
             if ($Request.Query.Type -eq 'GraphSubscription') {
                 # Graph Subscriptions
                 [pscustomobject]$ReceivedItem = $Request.Body.value
+                $WebhookData = [string]($ReceivedItem | ConvertTo-Json -Depth 10)
                 $Entity = [PSCustomObject]@{
                     PartitionKey = 'Webhook'
-                    RowKey       = [string](New-Guid).Guid
+                    RowKey       = [string](& $GetWebhookRowKey -WebhookType $Request.Query.Type -CippId $Request.Query.CIPPID -WebhookData $ReceivedItem)
                     Type         = $Request.Query.Type
-                    Data         = [string]($ReceivedItem | ConvertTo-Json -Depth 10)
+                    Data         = $WebhookData
                     CIPPID       = $Request.Query.CIPPID
                     WebhookInfo  = [string]($WebhookInfo | ConvertTo-Json -Depth 10)
                     FunctionName = 'PublicWebhookProcess'
                 }
-                Add-CIPPAzDataTableEntity @WebhookIncoming -Entity $Entity
+                Add-CIPPAzDataTableEntity @WebhookIncoming -Entity $Entity -Force
 
             } elseif ($Request.Query.Type -eq 'PartnerCenter') {
                 [pscustomobject]$ReceivedItem = $Request.Body
+                $WebhookData = [string]($ReceivedItem | ConvertTo-Json -Depth 10)
                 $Entity = [PSCustomObject]@{
                     PartitionKey = 'Webhook'
-                    RowKey       = [string](New-Guid).Guid
+                    RowKey       = [string](& $GetWebhookRowKey -WebhookType $Request.Query.Type -CippId $Request.Query.CIPPID -WebhookData $ReceivedItem)
                     Type         = $Request.Query.Type
-                    Data         = [string]($ReceivedItem | ConvertTo-Json -Depth 10)
+                    Data         = $WebhookData
                     CIPPID       = $Request.Query.CIPPID
                     WebhookInfo  = [string]($WebhookInfo | ConvertTo-Json -Depth 10)
                     FunctionName = 'PublicWebhookProcess'
                 }
-                Add-CIPPAzDataTableEntity @WebhookIncoming -Entity $Entity
+                Add-CIPPAzDataTableEntity @WebhookIncoming -Entity $Entity -Force
             } else {
                 $Body = 'This webhook is not authorized.'
                 $StatusCode = [HttpStatusCode]::Forbidden
