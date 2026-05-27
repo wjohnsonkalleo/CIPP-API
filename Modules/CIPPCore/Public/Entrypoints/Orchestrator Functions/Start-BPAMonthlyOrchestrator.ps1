@@ -17,7 +17,7 @@ function Start-BPAMonthlyOrchestrator {
 
     try {
         $CurrentFunctionApp = $env:WEBSITE_SITE_NAME
-        $IsProcessorNode = $env:CIPP_PROCESSOR -eq 'true' -or $CurrentFunctionApp -like '*-proc'
+        $IsProcessorNode = $CurrentFunctionApp -like '*-proc'
         if (!$IsProcessorNode) {
             Write-LogMessage -API 'BestPracticeAnalyser' -message "Monthly BPA scheduler skipped on non-processor app '$CurrentFunctionApp'" -sev Info
             return $false
