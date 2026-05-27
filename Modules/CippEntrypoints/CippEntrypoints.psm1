@@ -258,9 +258,11 @@ function Receive-CippOrchestrationTrigger {
         Write-Information "Durable Mode: $DurableMode"
 
         $RetryOptions = New-DurableRetryOptions @DurableRetryOptions
-        if (!$OrchestratorInput.Batch -or ($OrchestratorInput.Batch | Measure-Object).Count -eq 0 -and $OrchestratorInput.QueueFunction) {
+        $HasBatch = $OrchestratorInput.Batch -and (($OrchestratorInput.Batch | Measure-Object).Count -gt 0)
+        $HasQueueFunction = $null -ne $OrchestratorInput.QueueFunction
+        if (-not $HasBatch -and $HasQueueFunction) {
             $Batch = (Invoke-ActivityFunction -FunctionName 'CIPPActivityFunction' -Input $OrchestratorInput.QueueFunction -ErrorAction Stop) | Where-Object { $null -ne $_.FunctionName }
-        } elseif ($OrchestratorInput.Batch) {
+        } elseif ($HasBatch) {
             $Batch = $OrchestratorInput.Batch | Where-Object { $null -ne $_.FunctionName }
         } else {
             Write-Information 'No batch or queue function provided to orchestrator input'
@@ -576,4 +578,3 @@ function Receive-CIPPTimerTrigger {
 }
 
 Export-ModuleMember -Function @('Receive-CippHttpTrigger', 'Receive-CippQueueTrigger', 'Receive-CippOrchestrationTrigger', 'Receive-CippActivityTrigger', 'Receive-CIPPTimerTrigger')
-

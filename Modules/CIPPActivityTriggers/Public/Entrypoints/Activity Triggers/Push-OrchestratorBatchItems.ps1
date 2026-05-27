@@ -8,7 +8,14 @@ function Push-OrchestratorBatchItems {
 
     if ($Item.Parameters.BatchId) {
         $Table = Get-CippTable -TableName 'CippOrchestratorBatch'
-        $Entities = Get-CIPPAzDataTableEntity @Table -Filter "PartitionKey eq '$($Item.Parameters.BatchId)'"
+        $Entities = Get-CIPPAzDataTableEntity @Table -Filter "PartitionKey eq '$($Item.Parameters.BatchId)'" | Sort-Object @{ Expression = {
+                if ($null -ne $_.BatchIndex) {
+                    [int]$_.BatchIndex
+                } else {
+                    [int]::MaxValue
+                }
+            }
+        }, RowKey
         $BatchItems = [system.Collections.Generic.List[object]]::new()
         $Entities | ForEach-Object {
             $Item = $_.BatchItem | ConvertFrom-Json

@@ -98,13 +98,16 @@ function Start-CIPPOrchestrator {
         if ($InputObject.Batch) {
             # Store batch items separately to enable querying and tracking
             $BatchGuid = (New-Guid).Guid.ToString()
+            $BatchIndex = 0
             foreach ($BatchItem in $InputObject.Batch) {
                 $BatchEntity = @{
                     PartitionKey = $BatchGuid
-                    RowKey       = (New-Guid).Guid.ToString()
+                    RowKey       = '{0:D8}-{1}' -f $BatchIndex, (New-Guid).Guid.ToString()
+                    BatchIndex   = $BatchIndex
                     BatchItem    = [string]($BatchItem | ConvertTo-Json -Depth 10 -Compress)
                 }
                 Add-CIPPAzDataTableEntity @BatchTable -Entity $BatchEntity -Force
+                $BatchIndex++
             }
 
             # Remove batch from main input object to reduce size
@@ -166,13 +169,16 @@ function Start-CIPPOrchestrator {
 
             if ($InputObject.Batch) {
                 # Store batch items separately to enable querying and tracking
+                $BatchIndex = 0
                 foreach ($BatchItem in $InputObject.Batch) {
                     $BatchEntity = @{
                         PartitionKey = $Guid
-                        RowKey       = (New-Guid).Guid.ToString()
+                        RowKey       = '{0:D8}-{1}' -f $BatchIndex, (New-Guid).Guid.ToString()
+                        BatchIndex   = $BatchIndex
                         BatchItem    = [string]($BatchItem | ConvertTo-Json -Depth 10 -Compress)
                     }
                     Add-CIPPAzDataTableEntity @BatchTable -Entity $BatchEntity -Force
+                    $BatchIndex++
                 }
 
                 # Remove batch from main input object to reduce size
