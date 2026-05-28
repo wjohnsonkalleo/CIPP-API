@@ -3,9 +3,10 @@
     "Id": "c0c48d71-7918-4828-bc25-0e8c28a171a2",
     "Command": "Start-DurableCleanup",
     "Description": "Timer function to cleanup durable functions",
-    "Cron": "0 */15 * * * *",
+    "Cron": "0 7 * * * *",
     "Priority": 0,
     "RunOnProcessor": true,
+    "PreferredProcessor": "proc",
     "IsSystem": true
   },
   {
