@@ -27,23 +27,22 @@ function Start-DurableCleanup {
     $QueueCount = 0
 
     $FunctionsWithLongRunningOrchestrators = [System.Collections.Generic.List[object]]::new()
-    $NonDeterministicOrchestrators = [System.Collections.Generic.List[object]]::new()
+    $NonDeterministicOrchestratorSummary = [System.Collections.Generic.List[object]]::new()
 
     foreach ($Table in $InstancesTables) {
         $Table = Get-CippTable -TableName $Table
         $FunctionName = $Table.TableName -replace 'Instances', ''
         $Orchestrators = Get-CIPPAzDataTableEntity @Table -Filter "RuntimeStatus eq 'Running'" | Select-Object * -ExcludeProperty Input
-        $Queues = Get-CIPPAzStorageQueue -Name ('{0}*' -f $FunctionName) | Select-Object -Property Name, ApproximateMessageCount, QueueClient
         $LongRunningOrchestrators = $Orchestrators | Where-Object { $_.CreatedTime.DateTime -lt $TargetTime }
 
         if ($LongRunningOrchestrators.Count -gt 0) {
-            $FunctionsWithLongRunningOrchestrators.Add(@{'FunctionName' = $FunctionName })
+            $FunctionsWithLongRunningOrchestrators.Add(@{'FunctionName' = $FunctionName; Reason = 'LongRunning' })
             foreach ($Orchestrator in $LongRunningOrchestrators) {
                 $CreatedTime = [DateTime]::SpecifyKind($Orchestrator.CreatedTime.DateTime, [DateTimeKind]::Utc)
                 $TimeSpan = New-TimeSpan -Start $CreatedTime -End (Get-Date).ToUniversalTime()
                 $RunningDuration = [math]::Round($TimeSpan.TotalMinutes, 2)
                 Write-Information "Orchestrator: $($Orchestrator.PartitionKey), created: $CreatedTime, running for: $RunningDuration minutes"
-                if ($PSCmdlet.ShouldProcess($_.PartitionKey, 'Terminate Orchestrator')) {
+                if ($PSCmdlet.ShouldProcess($Orchestrator.PartitionKey, 'Terminate Orchestrator')) {
                     $Orchestrator = Get-CIPPAzDataTableEntity @Table -Filter "PartitionKey eq '$($Orchestrator.PartitionKey)'"
                     $Orchestrator.RuntimeStatus = 'Failed'
                     if ($Orchestrator.PSObject.Properties.Name -contains 'CustomStatus') {
@@ -57,12 +56,12 @@ function Start-DurableCleanup {
             }
         }
 
-        $NonDeterministicOrchestrators = $Orchestrators | Where-Object { $_.Output -match 'Non-Deterministic workflow detected' }
-        if ($NonDeterministicOrchestrators.Count -gt 0) {
-            $NonDeterministicOrchestrators.Add(@{'FunctionName' = $FunctionName })
-            foreach ($Orchestrator in $NonDeterministicOrchestrators) {
+        $NonDeterministicRunningOrchestrators = $Orchestrators | Where-Object { $_.Output -match 'Non-Deterministic workflow detected' }
+        if ($NonDeterministicRunningOrchestrators.Count -gt 0) {
+            $NonDeterministicOrchestratorSummary.Add(@{'FunctionName' = $FunctionName; Reason = 'NonDeterministic' })
+            foreach ($Orchestrator in $NonDeterministicRunningOrchestrators) {
                 Write-Information "Orchestrator: $($Orchestrator.PartitionKey) is Non-Deterministic"
-                if ($PSCmdlet.ShouldProcess($_.PartitionKey, 'Terminate Orchestrator')) {
+                if ($PSCmdlet.ShouldProcess($Orchestrator.PartitionKey, 'Terminate Orchestrator')) {
                     $Orchestrator = Get-CIPPAzDataTableEntity @Table -Filter "PartitionKey eq '$($Orchestrator.PartitionKey)'"
                     $Orchestrator.RuntimeStatus = 'Failed'
                     if ($Orchestrator.PSObject.Properties.Name -contains 'CustomStatus') {
@@ -76,8 +75,11 @@ function Start-DurableCleanup {
             }
         }
 
-        if (($LongRunningOrchestrators.Count -gt 0 -or $NonDeterministicOrchestrators.Count -gt 0) -and $Queues.ApproximateMessageCount -gt 0) {
-            $RunningQueues = $Queues | Where-Object { $_.ApproximateMessageCount -gt 0 }
+        if ($LongRunningOrchestrators.Count -gt 0 -or $NonDeterministicRunningOrchestrators.Count -gt 0) {
+            $RunningQueues = Get-CIPPAzStorageQueue -Name ('{0}*' -f $FunctionName) |
+                Select-Object -Property Name, ApproximateMessageCount, QueueClient |
+                Where-Object { $_.ApproximateMessageCount -gt 0 }
+
             foreach ($Queue in $RunningQueues) {
                 Write-Information "- Removing queue: $($Queue.Name), message count: $($Queue.ApproximateMessageCount)"
                 if ($PSCmdlet.ShouldProcess($Queue.Name, 'Clear Queue')) {
@@ -89,7 +91,10 @@ function Start-DurableCleanup {
     }
 
     if ($CleanupCount -gt 0 -or $QueueCount -gt 0) {
-        Write-LogMessage -api 'Durable Cleanup' -message "$CleanupCount orchestrators were terminated. $QueueCount queues were cleared." -sev 'Info' -LogData $FunctionsWithLongRunningOrchestrators
+        $CleanupLogData = [System.Collections.Generic.List[object]]::new()
+        foreach ($Item in $FunctionsWithLongRunningOrchestrators) { $CleanupLogData.Add($Item) }
+        foreach ($Item in $NonDeterministicOrchestratorSummary) { $CleanupLogData.Add($Item) }
+        Write-LogMessage -api 'Durable Cleanup' -message "$CleanupCount orchestrators were terminated. $QueueCount queues were cleared." -sev 'Info' -LogData $CleanupLogData
     }
 
     Write-Information "Durable cleanup complete. $CleanupCount orchestrators were terminated. $QueueCount queues were cleared."
